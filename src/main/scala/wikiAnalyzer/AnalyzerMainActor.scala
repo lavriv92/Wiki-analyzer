@@ -48,12 +48,11 @@ object AnalyzerMainActor {
     )
     eventSource
       .throttle(
-        elements = 1,
-        per = 5.seconds,
+        elements = 10,
+        per = 20.seconds,
         maximumBurst = 2,
         ThrottleMode.Shaping
       )
-      .take(10)
       .map(data => {
         val rawData = data.getData()
 
