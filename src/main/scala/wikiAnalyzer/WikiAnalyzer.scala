@@ -2,15 +2,41 @@ package wikiAnalyzer
 
 import akka.actor.typed.ActorSystem
 import akka.http.scaladsl.Http
-
-import Routes.rootRoute
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
+import akka.stream.alpakka.mongodb.scaladsl.MongoSource
+import akka.stream.scaladsl.Sink
+import spray.json.DefaultJsonProtocol
+import wikiAnalyzer.dto.Event
+import akka.http.scaladsl.server.Directives._
 
 import scala.io.StdIn
+import scala.util.{Success, Failure}
 
+final case class EventsList(events: Seq[Event])
 
-object WikiAnalyzer extends App {
+trait JSONSupport extends SprayJsonSupport with DefaultJsonProtocol {
+    implicit val messageFormat = jsonFormat5(Event)
+    implicit val eventsListFormat = jsonFormat1(EventsList)
+}
+
+object WikiAnalyzer extends App with JSONSupport {
     implicit val system = ActorSystem(AnalyzerMainActor(), "rootSystem")
     implicit val executionContext = system.executionContext
+
+    val rootRoute = path("events") {
+        get {
+            val eventsSource = MongoSource(Db.eventColl.find().limit(100)).runWith(Sink.seq)
+
+            onComplete(eventsSource) {
+                case Success(events) => complete(EventsList(events))
+                case Failure(e) => {
+                    println(s"error $e.getMessage")
+                    complete(EventsList(Seq()))
+                }
+
+            }
+        }
+    }
 
     val bindingFuture = Http().newServerAt("localhost", 8080).bind(rootRoute)
 
