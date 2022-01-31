@@ -12,10 +12,11 @@ import akka.NotUsed
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import akka.stream.ThrottleMode
-
 import akka.stream.alpakka.mongodb.scaladsl.MongoSink
 
-
+import java.sql.Timestamp
+import java.time.{Instant, LocalDate, ZoneId}
+import java.time.format.DateTimeFormatter
 import scala.util.parsing.json.JSON
 
 object AnalyzerMainActor {
@@ -32,6 +33,12 @@ object AnalyzerMainActor {
       retryDelay = 10.second
     )
 
+    def getDateFromTimestamp( longValue: Long ) : String = {
+      val date = Instant.ofEpochSecond(longValue).atZone(ZoneId.systemDefault()).toLocalDate();
+      val formatter = DateTimeFormatter.ofPattern("M/dd/yyyy")
+      date.format(formatter)
+    }
+
     eventSource
       .throttle(
         elements = 10,
@@ -46,16 +53,14 @@ object AnalyzerMainActor {
 
         JSON.parseFull(rawData) match {
           case Some(json) => {
-
+            println(json)
             val map = json.asInstanceOf[Map[String, Any]]
-
             val user = map("user").asInstanceOf[String]
-            val timestamp = map("timestamp").asInstanceOf[Number].intValue()
+            val timestamp = map("timestamp").asInstanceOf[Number].longValue()
             val topic = map("meta").asInstanceOf[Map[String, Any]]("topic").asInstanceOf[String]
             val contributionType = map("type").asInstanceOf[String]
 
-
-            dto.Event(user, timestamp, topic, contributionType, rawData)
+            dto.Event(user, getDateFromTimestamp(timestamp), topic, contributionType, rawData)
           }
           case None => throw new Exception("Error parsing JSON")
         }

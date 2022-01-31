@@ -8,12 +8,12 @@ import akka.stream.scaladsl.Sink
 import spray.json.DefaultJsonProtocol
 import wikiAnalyzer.dto.Event
 import akka.http.scaladsl.server.Directives._
-import org.mongodb.scala.model.Aggregates._
-import org.mongodb.scala.model.Accumulators._
 
-
+import java.time.{LocalDate}
+import java.time.format.DateTimeFormatter
 import scala.io.StdIn
-import scala.util.{Success, Failure}
+import scala.util.{Failure, Success}
+import java.sql.Timestamp
 
 final case class EventsList(events: Seq[Event])
 
@@ -22,22 +22,38 @@ trait JSONSupport extends SprayJsonSupport with DefaultJsonProtocol {
     implicit val eventsListFormat = jsonFormat1(EventsList)
 }
 
+
 object WikiAnalyzer extends App with JSONSupport {
     implicit val system = ActorSystem(AnalyzerMainActor(), "rootSystem")
     implicit val executionContext = system.executionContext
 
+    def getTimestamp( dateString: String ) : Long = {
+        val formatter = DateTimeFormatter.ofPattern("M/dd/yyyy")
+        val startTimestamp = LocalDate.parse(dateString, formatter).atStartOfDay()
+        val timestamp = Timestamp.valueOf(startTimestamp)
+        timestamp.getTime()
+    }
+
     val rootRoute = concat {
         path("events") {
             get {
-                val eventsSource = MongoSource(Db.eventColl.find().limit(100)).runWith(Sink.seq)
+                parameters(Symbol("user").as[String], Symbol("start").as[String], Symbol("end").as[String]) { (user, start, end) =>
+                    val eventsSource = MongoSource(Db.eventColl.find().limit(100))
+                      .filter(event => event.user == user)
+                      .filter(event => getTimestamp(event.date) > getTimestamp(start))
+                      .filter(event => getTimestamp(event.date) < getTimestamp(end))
+                      .runWith(Sink.seq)
 
-                onComplete(eventsSource) {
-                    case Success(events) => complete(EventsList(events))
-                    case Failure(e) => {
-                        println(s"error $e.getMessage")
-                        complete(EventsList(Seq()))
+                    println(getTimestamp(start));
+                    println(getTimestamp(end))
+
+                    onComplete(eventsSource) {
+                        case Success(events) => complete(EventsList(events))
+                        case Failure(e) => {
+                            println(s"error $e.getMessage")
+                            complete(EventsList(Seq()))
+                        }
                     }
-
                 }
             }
         }
