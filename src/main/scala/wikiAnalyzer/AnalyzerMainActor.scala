@@ -13,16 +13,29 @@ import akka.http.scaladsl.unmarshalling.Unmarshal
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import akka.stream.ThrottleMode
+import akka.stream.alpakka.mongodb.scaladsl.{MongoSink, MongoSource}
 import akka.stream.scaladsl.Sink
+import com.mongodb.reactivestreams.client.MongoClients
+import org.bson.codecs.configuration.CodecRegistries.{fromProviders, fromRegistries}
+import org.mongodb.scala.MongoClient.DEFAULT_CODEC_REGISTRY
+import org.mongodb.scala.bson.codecs.Macros._
 
 import scala.util.parsing.json.JSON
 
 object AnalyzerMainActor {
   final case class Message(text: String)
 
-  final case class Event(user: String, timestamp: String, topic: String, contributionType: String, rawEvent: String)
+  final case class Event(user: String, timestamp: Number, contributionType: String, rawEvent: String)
 
-  //TODO: Replace to more relevant code
+  private val client = MongoClients.create("mongodb://localhost:27017")
+  private val db = client.getDatabase("Events")
+
+  val codecRegistry = fromRegistries(fromProviders(classOf[Event]), DEFAULT_CODEC_REGISTRY)
+
+  private val eventColl = db
+    .getCollection("events", classOf[Event])
+    .withCodecRegistry(codecRegistry)
+
   def apply(): Behavior[Message] = Behaviors.setup { (context) =>
     implicit val system = context.system
     implicit val executionContext = system.executionContext
@@ -41,16 +54,25 @@ object AnalyzerMainActor {
         ThrottleMode.Shaping
       )
       .take(10)
-      .runWith(Sink.seq)
-      .map(_.map(data => {
+      .map(data => {
         val rawData = data.getData()
+
+        println(JSON.parseFull(rawData))
+
         JSON.parseFull(rawData) match {
           case Some(json) => {
-            print(json)
+
+            val map = json.asInstanceOf[Map[String, Any]]
+            val user = map("user").asInstanceOf[String]
+            val timestamp = map("timestamp").asInstanceOf[Number]
+            val contributionType = map("type").asInstanceOf[String]
+
+            Event(user, timestamp, contributionType, rawData)
           }
-          case None => println("Error parsing JSON")
+          case None => throw new Exception("Error parsing JSON")
         }
-      }))
+      })
+      .runWith(MongoSink.insertOne(eventColl))
 
     Behaviors.same
   }
