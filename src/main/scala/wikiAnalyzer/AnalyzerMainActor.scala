@@ -49,8 +49,6 @@ object AnalyzerMainActor {
       .map(data => {
         val rawData = data.getData()
 
-        println(JSON.parseFull(rawData))
-
         JSON.parseFull(rawData) match {
           case Some(json) => {
             println(json)
