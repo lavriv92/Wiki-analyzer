@@ -40,7 +40,6 @@ object WikiAnalyzer extends App with JSONSupport {
 
     val rootRoute = concat (
         path("events") {
-
             parameters(Symbol("user").as[String], Symbol("start").as[String], Symbol("end").as[String]) { (user, start, end) =>
                 val eventsSource = MongoSource(Db.eventColl.find().limit(100))
                   .filter(event => event.user == user)
@@ -62,21 +61,21 @@ object WikiAnalyzer extends App with JSONSupport {
         },
 
         path("top-contributed") {
-            val eventSource = MongoSource(Db.eventColl.find()).runWith(Sink.seq)
+            parameters(Symbol("user").as[String]) { (user) =>{
+                val eventSource = MongoSource(Db.eventColl.find())
+                  .filter(event => event.user == user)
+                  .runWith(Sink.seq)
 
-            onComplete(eventSource) {
-                case Success(events) => {
-                    val contributions = events.groupBy(_.contributionType).map(pair => Contribution(pair._1, pair._2.length))
+                onComplete(eventSource) {
+                    case Success(events) => {
+                        val contributions = events.groupBy(_.contributionType).map(pair => Contribution(pair._1, pair._2.length))
 
-                    complete(contributions)
+                        complete(contributions)
+                    }
                 }
             }
-        }
+        }}
     )
-
-
-
-
 
     val bindingFuture = Http().newServerAt("localhost", 8080).bind(rootRoute)
 
