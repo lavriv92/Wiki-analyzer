@@ -8,13 +8,11 @@ import akka.stream.alpakka.sse.scaladsl.EventSource
 import akka.stream.scaladsl.Source
 import akka.http.scaladsl.model.sse.ServerSentEvent
 import akka.NotUsed
-import akka.http.scaladsl.unmarshalling.Unmarshal
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import akka.stream.ThrottleMode
-import akka.stream.alpakka.mongodb.scaladsl.{MongoSink, MongoSource}
-import akka.stream.scaladsl.Sink
+import akka.stream.alpakka.mongodb.scaladsl.MongoSink
 import com.mongodb.reactivestreams.client.MongoClients
 import org.bson.codecs.configuration.CodecRegistries.{fromProviders, fromRegistries}
 import org.mongodb.scala.MongoClient.DEFAULT_CODEC_REGISTRY
@@ -25,7 +23,7 @@ import scala.util.parsing.json.JSON
 object AnalyzerMainActor {
   final case class Message(text: String)
 
-  final case class Event(user: String, timestamp: Number, contributionType: String, rawEvent: String)
+  final case class Event(user: String, timestamp: Int, topic: String, contributionType: String, rawEvent: String)
 
   private val client = MongoClients.create("mongodb://localhost:27017")
   private val db = client.getDatabase("Events")
@@ -63,10 +61,11 @@ object AnalyzerMainActor {
 
             val map = json.asInstanceOf[Map[String, Any]]
             val user = map("user").asInstanceOf[String]
-            val timestamp = map("timestamp").asInstanceOf[Number]
+            val timestamp = map("timestamp").asInstanceOf[Number].intValue()
+            val topic = map("meta").asInstanceOf[Map[String, Any]]("topic").asInstanceOf[String]
             val contributionType = map("type").asInstanceOf[String]
 
-            Event(user, timestamp, contributionType, rawData)
+            Event(user, timestamp, topic, contributionType, rawData)
           }
           case None => throw new Exception("Error parsing JSON")
         }
