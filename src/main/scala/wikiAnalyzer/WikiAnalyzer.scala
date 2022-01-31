@@ -38,49 +38,43 @@ object WikiAnalyzer extends App with JSONSupport {
         timestamp.getTime()
     }
 
-    val rootRoute = concat {
+    val rootRoute = concat (
         path("events") {
-            get {
-                parameters(Symbol("user").as[String], Symbol("start").as[String], Symbol("end").as[String]) { (user, start, end) =>
-                    val eventsSource = MongoSource(Db.eventColl.find().limit(100))
-                      .filter(event => event.user == user)
-                      .filter(event => getTimestamp(event.date) > getTimestamp(start))
-                      .filter(event => getTimestamp(event.date) < getTimestamp(end))
-                      .runWith(Sink.seq)
 
-                    println(getTimestamp(start));
-                    println(getTimestamp(end))
+            parameters(Symbol("user").as[String], Symbol("start").as[String], Symbol("end").as[String]) { (user, start, end) =>
+                val eventsSource = MongoSource(Db.eventColl.find().limit(100))
+                  .filter(event => event.user == user)
+                  .filter(event => getTimestamp(event.date) > getTimestamp(start))
+                  .filter(event => getTimestamp(event.date) < getTimestamp(end))
+                  .runWith(Sink.seq)
 
-                    onComplete(eventsSource) {
-                        case Success(events) => complete(EventsList(events))
-                        case Failure(e) => {
-                            println(s"error $e.getMessage")
-                            complete(EventsList(Seq()))
-                        }
+                println(getTimestamp(start));
+                println(getTimestamp(end))
+
+                onComplete(eventsSource) {
+                    case Success(events) => complete(EventsList(events))
+                    case Failure(e) => {
+                        println(s"error $e.getMessage")
+                        complete(EventsList(Seq()))
                     }
                 }
             }
-        }
+        },
 
         path("top-contributed") {
-            get {
+            val eventSource = MongoSource(Db.eventColl.find()).runWith(Sink.seq)
 
-                val eventSource = MongoSource(Db.eventColl.find()).runWith(Sink.seq)
+            onComplete(eventSource) {
+                case Success(events) => {
+                    val contributions = events.groupBy(_.contributionType).map(pair => Contribution(pair._1, pair._2.length))
 
-
-                onComplete(eventSource) {
-                    case Success(events) => {
-
-                        val contributions = events.groupBy(_.contributionType).map(pair => Contribution(pair._1, pair._2.length))
-
-
-                        complete(contributions)
-                    }
+                    complete(contributions)
                 }
-
             }
         }
-    }
+    )
+
+
 
 
 
