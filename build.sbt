@@ -14,6 +14,7 @@ lazy val root = (project in file("."))
       "com.lightbend.akka" %% "akka-stream-alpakka-sse" % "3.0.4",
       "org.scalatest" %% "scalatest" % "3.2.7" % Test,
       "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test,
-      "com.typesafe.akka" %% "akka-actor-testkit-typed" % AkkaVersion % Test
+      "com.typesafe.akka" %% "akka-actor-testkit-typed" % AkkaVersion % Test,
+      "org.mongodb.scala" %% "mongo-scala-driver" % "2.8.0"
     )
   )

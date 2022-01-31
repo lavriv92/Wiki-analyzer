@@ -15,10 +15,12 @@ import scala.concurrent.duration._
 import akka.stream.ThrottleMode
 import akka.stream.scaladsl.Sink
 
+import scala.util.parsing.json.JSON
+
 object AnalyzerMainActor {
   final case class Message(text: String)
 
-  final case class Event(timestamp: String)
+  final case class Event(user: String, timestamp: String, topic: String, contributionType: String, rawEvent: String)
 
   //TODO: Replace to more relevant code
   def apply(): Behavior[Message] = Behaviors.setup { (context) =>
@@ -40,8 +42,15 @@ object AnalyzerMainActor {
       )
       .take(10)
       .runWith(Sink.seq)
-      .map(_.map(n => Unmarshal(n.data).to[Event]))
-      .foreach(println)
+      .map(_.map(data => {
+        val rawData = data.getData()
+        JSON.parseFull(rawData) match {
+          case Some(json) => {
+            print(json)
+          }
+          case None => println("Error parsing JSON")
+        }
+      }))
 
     Behaviors.same
   }
